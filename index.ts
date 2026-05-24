@@ -12,23 +12,13 @@ import {
 	type ExtensionAPI,
 	type TruncationResult,
 } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { type Static, Type } from "typebox";
 import {
 	fetchWithExa,
 	searchWithExa,
 	type ExaFetchOptions,
 	type ExaSearchOptions,
 } from "./exa.js";
-
-interface WebSearchParams {
-	query: string;
-	numResults?: number;
-}
-
-interface FetchContentParams {
-	urls: string[];
-	maxCharacters?: number;
-}
 
 const DEFAULT_NUM_RESULTS = 5;
 const DEFAULT_MAX_CHARACTERS = 3_000;
@@ -118,78 +108,28 @@ export default function (pi: ExtensionAPI): void {
 		tempDirs.clear();
 	});
 
-	pi.registerTool<WebSearchParams>({
-		name: "web_search",
-		label: "Web Search (Exa)",
-		description:
-			`Search the web. Returns results with titles, URLs, and snippets. ${TRUNCATION_NOTICE}`,
-		promptSnippet:
-			"Search the web",
-		parameters: WebSearchParamsSchema,
-		prepareArguments(args) {
-			if (!isRecord(args)) return args;
-			return {
-				query: typeof args.query === "string" ? args.query.trim() : args.query,
-				numResults: args.numResults,
-			};
-		},
-
-		async execute(_toolCallId, params: WebSearchParams, signal, onUpdate) {
-			onUpdate?.({
-				content: [{ type: "text", text: `Searching: "${params.query}"...` }],
-				details: {
-					phase: "search",
-					progress: 0,
-					currentQuery: params.query,
-					provider: "exa",
-				},
-			});
-
-			const options: ExaSearchOptions = {
-				numResults: params.numResults ?? DEFAULT_NUM_RESULTS,
-			};
-			if (signal) options.signal = signal;
-
-			const rawOutput = await searchWithExa(params.query, options);
-			const truncatedOutput = await truncateToolOutput("web-search", rawOutput, tempDirs);
-
-			return {
-				content: [{ type: "text", text: truncatedOutput.text }],
-				details: {
-					provider: "exa",
-					query: params.query,
-					success: true,
-					error: null,
-					...(truncatedOutput.truncation
-						? {
-								truncation: truncatedOutput.truncation,
-								fullOutputPath: truncatedOutput.fullOutputPath,
-							}
-						: {}),
-				},
-			};
-		},
-	});
-
-	pi.registerTool<FetchContentParams>({
+	pi.registerTool({
 		name: "fetch_content",
 		label: "Fetch Content (Exa)",
 		description:
 			`Fetch from web URLs. Returns their content as markdown. ${TRUNCATION_NOTICE}`,
 		promptSnippet:
 			"Fetch web content",
+		promptGuidelines: [
+			"Use fetch_content only when content cannot be fetched with bash tools like curl and git."
+		],
 		parameters: FetchContentParamsSchema,
-		prepareArguments(args) {
-			if (!isRecord(args)) return args;
+		prepareArguments(args): Static<typeof FetchContentParamsSchema> {
+			if (!isRecord(args)) return args as Static<typeof FetchContentParamsSchema>;
 			return {
 				urls: Array.isArray(args.urls)
-					? args.urls.map((url) => (typeof url === "string" ? url.trim() : url))
-					: args.urls,
-				maxCharacters: args.maxCharacters,
+					? args.urls.map((url) => (typeof url === "string" ? url.trim() : url)) as string[]
+					: (args.urls as string[]),
+				maxCharacters: args.maxCharacters as number | undefined,
 			};
 		},
 
-		async execute(_toolCallId, params: FetchContentParams, signal, onUpdate) {
+		async execute(_toolCallId, params, signal, onUpdate) {
 			onUpdate?.({
 				content: [{ type: "text", text: `Fetching ${params.urls.length} URL(s)...` }],
 				details: {
@@ -215,6 +155,62 @@ export default function (pi: ExtensionAPI): void {
 					urls: params.urls,
 					success: true,
 					urlCount: params.urls.length,
+					error: null,
+					...(truncatedOutput.truncation
+						? {
+								truncation: truncatedOutput.truncation,
+								fullOutputPath: truncatedOutput.fullOutputPath,
+							}
+						: {}),
+				},
+			};
+		},
+	});
+
+	pi.registerTool({
+		name: "web_search",
+		label: "Web Search (Exa)",
+		description:
+			`Search the web. Returns results with titles, URLs, and snippets. ${TRUNCATION_NOTICE}`,
+		promptSnippet:
+			"Search the web",
+		promptGuidelines: [
+			"Use web_search only when search cannot be performed with bash tools like gh and content cannot be fetched and searched locally."
+		],
+		parameters: WebSearchParamsSchema,
+		prepareArguments(args): Static<typeof WebSearchParamsSchema> {
+			if (!isRecord(args)) return args as Static<typeof WebSearchParamsSchema>;
+			return {
+				query: typeof args.query === "string" ? args.query.trim() : (args.query as string),
+				numResults: args.numResults as number | undefined,
+			};
+		},
+
+		async execute(_toolCallId, params, signal, onUpdate) {
+			onUpdate?.({
+				content: [{ type: "text", text: `Searching: "${params.query}"...` }],
+				details: {
+					phase: "search",
+					progress: 0,
+					currentQuery: params.query,
+					provider: "exa",
+				},
+			});
+
+			const options: ExaSearchOptions = {
+				numResults: params.numResults ?? DEFAULT_NUM_RESULTS,
+			};
+			if (signal) options.signal = signal;
+
+			const rawOutput = await searchWithExa(params.query, options);
+			const truncatedOutput = await truncateToolOutput("web-search", rawOutput, tempDirs);
+
+			return {
+				content: [{ type: "text", text: truncatedOutput.text }],
+				details: {
+					provider: "exa",
+					query: params.query,
+					success: true,
 					error: null,
 					...(truncatedOutput.truncation
 						? {
