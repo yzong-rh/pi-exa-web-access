@@ -1,0 +1,25 @@
+{
+  "name": "pi-exa-web-access",
+  "version": "0.1.0",
+  "description": "Minimal Exa-backed web search and fetch extension for Pi coding agent",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "extension",
+    "web-search",
+    "exa",
+    "fetch"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
